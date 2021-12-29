@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  bot:
+    build:
+      dockerfile: ./bot/Dockerfile
+      context: ./
+    container_name: bot
+    networks:
+      - shitlist
+networks:
+  shitlist: {}
