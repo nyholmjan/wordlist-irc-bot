@@ -1,26 +1,9 @@
-import { initializeApp, applicationDefault, cert } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
-import WordService from './wordService'
-import LoginService from './loginService'
+import WordService from "./wordService";
+const { Client } = require("@elastic/elasticsearch");
+const client = new Client({
+  node: `${process.env.ELASTIC_SEARCH_HOST}:${process.env.ELASTIC_SEARCH_PORT}`,
+});
 
-const privateKey = process.env.GCP_SERVICE_ACCOUNT_KEY
-const projectId = process.env.GCP_SERVICE_ACCOUNT_PROJECT_ID
-const clientEmail = process.env.GCP_SERVICE_ACCOUNT_CLIENT_EMAIL
+const wordService = new WordService(client);
 
-const serviceAccount = {
-    privateKey,
-    projectId,
-    clientEmail,
-}
-
-initializeApp({
-    credential:
-        privateKey && projectId ? cert(serviceAccount) : applicationDefault(),
-})
-
-export const db = getFirestore()
-
-const wordService = new WordService(db)
-const loginService = new LoginService(db)
-
-export { wordService, loginService }
+export { wordService };

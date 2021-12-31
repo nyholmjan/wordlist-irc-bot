@@ -3,7 +3,7 @@ import { wordService } from '../../../shared/database'
 // no types for the module. using require for now
 const irc = require('irc-upd')
 
-const channel = process.env.IRC_BOT_CHANNEL || '#testifoorumi'
+const channels = process.env.IRC_BOT_CHANNEL ? process.env.IRC_BOT_CHANNEL.split(',') : ['#testifoorumi']
 const network = process.env.IRC_BOT_NETWORK || 'irc.ircnet.com'
 
 const admins =
@@ -12,13 +12,13 @@ const admins =
         : ['kolistelija']
 
 const bot = {
-    nick: process.env.IRC_BOT_NICK || 'w-bot',
+    nick: process.env.IRC_BOT_NICK || 'test-bot',
     userName: process.env.IRC_BOT_USERNAME || 'Paskalista',
     realName: process.env.IRC_BOT_REALNAME || 'Paska Lista Bot',
 }
 
 const client = new irc.Client(network, bot.nick, {
-    channels: [channel],
+    channels: channels,
     userName: bot.userName,
     realName: bot.realName,
     debug: true,
@@ -34,26 +34,28 @@ client.addListener('error', (message: string) => {
 client.on(
     'message',
     async (nick: string, to: string, text: string, _message: string) => {
-        if (text.startsWith(`${bot.nick}:`) || to === bot.nick) {
+        if (text.startsWith(`${client.nick}:`) || to === client.nick) {
             const command =
-                to === bot.nick ? text : text.split(' ').slice(1).join(' ')
-            const toWhom = to === bot.nick ? nick : to
+                to === client.nick ? text : text.split(' ').slice(1).join(' ')
+            const toWhom = to === client.nick ? nick : to
             console.log(nick, to, command)
             if (admins.some((admin) => nick === admin)) {
                 if (
                     command.startsWith('lisää paskasana') &&
                     command.split(' ').length === 3
                 ) {
+                    const word = command.split(' ')[2]
                     try {
-                        await wordService.add(command.split(' ')[2])
-                        client.say(
-                            toWhom,
-                            `Paskasana lisätty: ${command.split(' ')[2]}`
-                        )
+                        await wordService.add(word, nick)
+                        client.say(toWhom, `Paskasana lisätty: ${word}`)
                         return
                     } catch (error) {
                         if (error instanceof Error) {
-                            client.say(admins[0], error.message)
+                            if (error.message === 'Word exists') {
+                                client.say(toWhom, `${word} on jo paskasana`)
+                            } else {
+                                client.say(admins[0], error.message)
+                            }
                         } else {
                             console.log(error)
                         }
@@ -89,17 +91,14 @@ client.on(
                     }
                 }
             }
-        } else if (to === channel) {
+        } else if (channels.some(channel => to === channel)) {
             try {
-                const words = await wordService.getAll()
-                const wordsRegexp = new RegExp(`${words.join('|')}`, 'ig')
-                const regexpMatchArray = [...text.matchAll(wordsRegexp)]
-                if (regexpMatchArray.length > 0) {
-                    const matches = regexpMatchArray
-                        .map((match) => match[0])
-                        .join(', ')
-                    const errorMessage = `${nick}: ethän käytä seuraavia sanoja: ${matches}`
-                    client.say(channel, errorMessage)
+                const matches = await wordService.matchAll(text)
+                if (matches.length > 0) {
+                    const errorMessage = `${nick}: ethän käytä seuraavia sanoja, kiitos: ${matches.join(
+                        ', '
+                    )}`
+                    client.say(to, errorMessage)
                 }
             } catch (error) {
                 if (error instanceof Error) {
